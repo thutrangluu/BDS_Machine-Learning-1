@@ -1,0 +1,9 @@
+---
+title: "2. MM algorithm"
+author: "Thu Trang Luu"
+date: "11/3/2023"
+output: pdf_document
+---
+ \section Exercise 2.1
+ 
+ 
