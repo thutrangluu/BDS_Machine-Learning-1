@@ -18,6 +18,7 @@ data("Airq")
 air_data = data.matrix(Airq)
 # scaling data
 scaled_air_data = cbind(air_data[,1],scale(air_data[,-1]))
+X=cbind(1,scaled_air_data[,-1])
 ```
 
 \subsection Exercise 3.4
@@ -31,19 +32,20 @@ RSS <- function (beta,y,X){
 
 MM_34 <- function (y,X){
   eps = 0.0000001 # set epsilon
-  p=ncol(Airq)-1 # find number of columns
+  p=ncol(X) # find number of columns
   
-  beta_0 = matrix(rnorm(p),p,1) # random beta_0
+  # beta_0 = matrix(rnorm(p),p,1) # random beta_0
+  beta_0 = matrix(0,p,1)
   RSS_0 = RSS(beta_0,y,X) # RSS of beta_0
   RSS_k = 0 # set RSS of beta_k
-  # XtX = t(X)%*%Xf
-  lambda = max(eigen(t(X)%*%X)$values) # find lambda as maximum eigenvalue
+  XtX = t(X)%*%X
+  lambda = max(eigen(XtX)$values) # find lambda as maximum eigenvalue
   
   k = 1 # iteration
-  while (k == 1 || (RSS_0 − RSS_k)/RSS_0 > eps){
+  while (k == 1 || (RSS_0 - RSS_k)/RSS_0 > eps){
     
     # Calculate new beta_k
-    beta_k = beta_0 - lambda**-1*t(X)%*%X%*%beta_0 + lambda**-1*t(X)%*%y
+    beta_k = beta_0 - lambda**-1*XtX%*%beta_0 + lambda**-1*t(X)%*%y
     # Find RSS(beta_k)
     RSS_k = RSS(beta_k,y,X)
     
@@ -52,7 +54,7 @@ MM_34 <- function (y,X){
     # Print progress
     cat("Iter =",k,
         "RSS(beta_k) =",RSS_k,
-        "RSS(beta_k-1) - RSS(beta_k) =",RSS_0−RSS_k,
+        "RSS(beta_k-1) - RSS(beta_k) =",RSS_0-RSS_k,
         "RSS(beta_k-1) =",RSS_0,"\n")
     
     # Update beta
@@ -66,14 +68,13 @@ MM_34 <- function (y,X){
 ```
 
 ```{r 3.4b}
-MM_34(scaled_air_data[,1],scaled_air_data[,-1])
+MM_34(scaled_air_data[,1],X)
 ```
 
 ```{r 3.4c}
-model34 = lm(Airq$airq~Airq$vala+Airq$rain+Airq$coas+Airq$dens+Airq$medi,Airq)
+model34 = lm(Airq$airq~scaled_air_data[,-1])
 summary(model34)
 round(model34$coefficients,4)
-
 ```
 \subsection Exercise 3.5
 
