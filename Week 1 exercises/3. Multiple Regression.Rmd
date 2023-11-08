@@ -3,39 +3,44 @@ title: "3. Multiple Regession"
 author: "Thu Trang Luu"
 date: "11/2/2023"
 output: pdf_document
+
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+if (!require(tinytex)) install.packages('tinytex')
 ```
 
 \subsection Exercise 3.2
 
 
 ```{r import data}
+if(!require(Ecdat)) install.packages("Ecdat", repos="http://R-Forge.R-project.org")
+library("Ecdat")
 data("Airq")
 # df to matrix
 air_data = data.matrix(Airq)
 # scaling data
 scaled_air_data = cbind(air_data[,1],scale(air_data[,-1]))
+# make matrix X with a column of 1 for intercept
 X=cbind(1,scaled_air_data[,-1])
 ```
 
 \subsection Exercise 3.4
 
 ```{r 3.4a}
+set.seed(123)
 RSS <- function (beta,y,X){
   # calculate RSS of a certain beta vector
   e = y-X%*%beta
   return(t(e)%*%e)
 }
 
-MM_34 <- function (y,X){
+MM_34 <- function (y,X,verbose=FALSE){
   eps = 0.0000001 # set epsilon
   p=ncol(X) # find number of columns
   
-  # beta_0 = matrix(rnorm(p),p,1) # random beta_0
-  beta_0 = matrix(0,p,1)
+  beta_0 = matrix(rnorm(p),p,1) # random beta_0
   RSS_0 = RSS(beta_0,y,X) # RSS of beta_0
   RSS_k = 0 # set RSS of beta_k
   XtX = t(X)%*%X
@@ -52,11 +57,12 @@ MM_34 <- function (y,X){
     RSS_0 = RSS(beta_0,y,X)
     
     # Print progress
-    cat("Iter =",k,
-        "RSS(beta_k) =",RSS_k,
-        "RSS(beta_k-1) - RSS(beta_k) =",RSS_0-RSS_k,
-        "RSS(beta_k-1) =",RSS_0,"\n")
-    
+    if (verbose){
+      cat("Iter =",k,
+          "RSS(beta_k) =",RSS_k,
+          "RSS(beta_k-1) - RSS(beta_k) =",RSS_0-RSS_k,
+          "RSS(beta_k-1) =",RSS_0,"\n")
+    }
     # Update beta
     beta_0 = beta_k
     
@@ -79,44 +85,43 @@ round(model34$coefficients,4)
 \subsection Exercise 3.5
 
 ```{r 3.5a}
-MM_better_subset <- function (y,X){
-  eps = 0.0000001
-  p = ncol(Airq)-1
-  m = p-1
+MM_better_subset <- function (y,X,m=0,verbose=FALSE){
+  eps = 0.0000001 # set epsilon
+  p=ncol(X) # find number of columns
+  
   beta_0 = matrix(rbind(rnorm(m),rep(0,p-m)),p,1)
-  RSS_0 = RSS(beta_0,y,X)
-  RSS_k = RSS_0
-  # XtX = t(X)%*%X
-  lambda = max(eigen(t(X)%*%X)$values)
+  RSS_0 = RSS(beta_0,y,X) # RSS of beta_0
+  RSS_k = 0 # set RSS of beta_k
+  XtX = t(X)%*%X
+  lambda = max(eigen(XtX)$values) # find lambda as maximum eigenvalue
   
   k = 1
-  
-  while (k == 1 || (RSS_0 − RSS_k)/RSS_0 > eps){
-    
+  while (k == 1 || (RSS_0 - RSS_k)/RSS_0 > eps){
     u = beta_0 - lambda**-1*t(X)%*%X%*%beta_0 + lambda**-1*t(X)%*%y
-    beta_k = matrix(0, p, 1)
-    sort(u, decreasing = TRUE)
-    
-    indexv = match(u[1:m],beta_0)
-    
-    for (i in range(m)){
-      beta_k[indexv[i]] = u[indexv[i]]
+    beta_k = matrix(0,p,1)
+    beta_k[1] = u[1]
+    phi = sort.int(abs(u), decreasing = TRUE,index.return = TRUE)
+    for (i in 1:m){
+      beta_k[phi$ix[i]] = u[phi$ix[i]]
     }
     
     RSS_k = RSS(beta_k,y,X)
     RSS_0 = RSS(beta_0,y,X)
     
-    cat("Iter =",k,"RSS(beta_k) =",RSS_k,"RSS(beta_k-1) - RSS(beta_k) =",RSS_0−RSS_k,"RSS(beta_k-1) =",RSS_0,"\n")
+    if (verbose){
+      cat("Iter =",k,
+          "RSS(beta_k) =",RSS_k,
+          "RSS(beta_k-1) - RSS(beta_k) =",RSS_0-RSS_k,
+          "RSS(beta_k-1) =",RSS_0,"\n")
+    }
     
     beta_0 = beta_k
     k=k+1
   }
-  
   return(beta_0)
 }
 ```
 
 ```{r}
-MM_better_subset(scaled_air_data[,1],scaled_air_data[,-1])
+MM_better_subset(scaled_air_data[,1],X,m=3)
 ```
-

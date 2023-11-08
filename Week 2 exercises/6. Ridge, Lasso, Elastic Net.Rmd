@@ -1,0 +1,84 @@
+---
+title: "6. Ridge, Lasso, Elastic Net"
+author: "Thu Trang Luu"
+date: "2023-11-07"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("knitr")
+```
+
+```{r importing packages}
+if(!require(Ecdat)) install.packages("Ecdat", repos="http://R-Forge.R-project.org")
+library("Ecdat")
+if (!require(tinytex)) install.packages('tinytex')
+library("tinytex")
+```
+
+## Exercise 6.1
+
+## Exercise 6.2
+
+```{r}
+################# Prepare data ###################
+# load data 
+data("Airq")
+# make dataframe
+dfair=data.frame(Airq)
+# make dummy variables for coas column
+dfair$coas<-ifelse(dfair$coas=="yes",1,0)
+# scale dataframe
+scaled_dfair = data.frame(airq=dfair$airq,scale(dfair[,-1]))
+# make matrix
+scaled_mair = as.matrix(scaled_dfair)
+# make X
+X = cbind(rep(1,length(dfair)),scaled_mair[,-1])
+XtX = t(X)%*%X
+```
+
+```{r}
+################ Linear model ####################
+## 6.2a
+m62 = lm(airq~., data = scaled_dfair)
+beta_full=round(m62$coefficients,4)
+beta_vala = beta_full
+
+## 6.2b
+beta_vala[2] = 0
+y_vala = X%*%beta_vala
+
+## 6.2c
+r_vala = scaled_mair[1] - y_vala
+```
+
+```{r}
+################# Scaled Lasso_Loss ####################
+
+Scaled_Lasso_Loss <- function(y,X,beta,lambda){
+  e = y-beta*X
+  XtX = t(X)%*%X
+  yty = t(y)%*%y
+  return((t(e)%*%e)/(yty)+lambda*(XtX/yty)**1/2*abs(beta))
+}
+
+## 6.2e
+beta_e = c(seq(-0.005,0.005,length.out=20))
+lambda_e = c(0.05,0.10,0.20)
+cols = rainbow(length(lambda_e))
+res=c()
+for (lambda in lambda_e){
+  res=cbind(res,lapply(beta_e,Scaled_Lasso_Loss,r_vala,X[2],lambda))
+}
+matplot(beta_e, res, col=cols, type="l", lty=1, lwd=2, xlab="beta", ylab="Scaled Lasso Loss")
+
+# res <- mapply(Scaled_Lasso_Loss,r_vala,X[2],beta_e,lambda_e)
+legend("bottomright", legend=lambda_e, title="lambda", lwd=2, col=cols)
+  
+```
+
+## Exercise 6.3
+
+## Exercise 6.4
+
