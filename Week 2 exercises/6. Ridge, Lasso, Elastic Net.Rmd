@@ -15,6 +15,11 @@ if(!require(Ecdat)) install.packages("Ecdat", repos="http://R-Forge.R-project.or
 library("Ecdat")
 if (!require(tinytex)) install.packages('tinytex')
 library("tinytex")
+if (!require("MASS")) install.packages("MASS")
+library("MASS")
+if (!require("plotrix")) install.packages("plotrix")
+if (!require("glmnet")) install.packages("glmnet")
+set.seed(123)
 ```
 
 ## Exercise 6.1
@@ -29,20 +34,16 @@ data("Airq")
 dfair=data.frame(Airq)
 # make dummy variables for coas column
 dfair$coas<-ifelse(dfair$coas=="yes",1,0)
-# scale dataframe
-scaled_dfair = data.frame(airq=dfair$airq,scale(dfair[,-1]))
-# make matrix
-scaled_mair = as.matrix(scaled_dfair)
-# make X
-X = cbind(rep(1,length(dfair)),scaled_mair[,-1])
+X = model.matrix(airq~.,data=dfair)
+X[,-1] = scale(X[,-1])
 XtX = t(X)%*%X
 ```
 
 ```{r}
 ################ Linear model ####################
 ## 6.2a
-m62 = lm(airq~., data = scaled_dfair)
-beta_full=round(m62$coefficients,4)
+m62 = lm(airq~X[,-1], data = dfair)
+beta_full=m62$coefficients
 beta_vala = beta_full
 
 ## 6.2b
@@ -50,17 +51,20 @@ beta_vala[2] = 0
 y_vala = X%*%beta_vala
 
 ## 6.2c
-r_vala = scaled_mair[1] - y_vala
+r_vala = dfair$airq - y_vala
 ```
 
 ```{r}
 ################# Scaled Lasso_Loss ####################
 
-Scaled_Lasso_Loss <- function(y,X,beta,lambda){
-  e = y-beta*X
-  XtX = t(X)%*%X
+Scaled_Lasso_Loss <- function(y,x,beta,lambda){
+  beta=as.matrix(beta)
+  x=as.matrix(x)
+  y=as.matrix(y)
+  e = y-x%*%beta
+  xtx = t(x)%*%x
   yty = t(y)%*%y
-  return((t(e)%*%e)/(yty)+lambda*(XtX/yty)**1/2*abs(beta))
+  return((t(e)%*%e)/(yty)+lambda*(xtx/yty)**1/2*sqrt(t(beta)%*%beta))
 }
 
 ## 6.2e
@@ -69,16 +73,109 @@ lambda_e = c(0.05,0.10,0.20)
 cols = rainbow(length(lambda_e))
 res=c()
 for (lambda in lambda_e){
-  res=cbind(res,lapply(beta_e,Scaled_Lasso_Loss,r_vala,X[2],lambda))
+  res=cbind(res,lapply(beta_e,FUN=Scaled_Lasso_Loss,y=r_vala,x=X[,2],lambda=lambda))
 }
 matplot(beta_e, res, col=cols, type="l", lty=1, lwd=2, xlab="beta", ylab="Scaled Lasso Loss")
 
 # res <- mapply(Scaled_Lasso_Loss,r_vala,X[2],beta_e,lambda_e)
 legend("bottomright", legend=lambda_e, title="lambda", lwd=2, col=cols)
-  
+
 ```
 
 ## Exercise 6.3
+```{r load supermarket data}
+load("supermarket1996.RData")
+```
+
+```{r}
+## 6.3a                    
+y63 <- as.vector(supermarket1996$GROCERY_sum)                  # y variable
+# Credit contains some nominal variable
+# Create a numeric matrix of dataframe Credit without last column (Balance) and intercept
+library(glmnet, quietly = TRUE)
+# Get columns names
+cols_supermarket=names(supermarket1996)
+# omit unnecessary cols
+cols_supermarket=cols_supermarket[!cols_supermarket %in% c("STORE", "CITY", "ZIP", "GROCCOUP_sum","SHPINDX")]
+
+X63 <- model.matrix(GROCERY_sum~., data = supermarket1996[cols_supermarket])  # Predictor variables (as a matrix, not dataframe)                  # Make columns z-scores of nonfactors
+X63[,2:45] = scale(X63[,2:45])
+X63 = X63[,-1]
+m63 <- glmnet(X63, y63, alpha = 0.5, lambda = 10^seq(-2, 7, length.out = 50),
+                 standardize = FALSE)
+dev.new(width = 20, height = 15, unit = "cm")
+plot(m63, xvar = "lambda", label = TRUE, las = 1)
+
+m63.cv <- cv.glmnet(X63, y63, alpha = 0.5, lambda = 10^seq(-2, 7, length.out = 50),
+                 standardize = FALSE,nfold=10)
+
+result.m63 <- glmnet(X63, y63, alpha = 0.5, lambda = m63.cv$lambda.min,
+                 standardize = FALSE)  
+print(m63.cv$lambda.min)
+result.m63$beta
+```
 
 ## Exercise 6.4
+```{r}
+y64 <- as.vector(supermarket1996$GROCERY_sum) 
+X64 <- model.matrix(GROCERY_sum~., data = supermarket1996[cols_supermarket])  # Predictor variables (as a matrix, not dataframe)                  
+# Make columns z-scores of nonfactors
+X64[,2:45] = scale(X64[,2:45])
+```
+
+```{r}
+Elas_Loss <- function(y, X, beta, alpha, lambda) {
+  n = length(y)
+  Xb = X%*%beta
+  e = y-Xb
+  btb = t(beta)%*%beta
+  l1.dist = sum(abs(beta))
+  return ((2*n)**-1 * t(e)%*%e + lambda*((1-alpha)/2*btb + alpha*l1.dist))
+}
+
+MM_elasticnet <- function(y, X, alpha, lambda,verbose=FALSE){
+  eps = 0.000001 # set epsilon
+  p=ncol(X) # find number of columns
+  n=length(y)
+  
+  beta_0 = matrix(1,p,1) # random beta_0
+  L.b0 = Elas_Loss(y, X, beta_0, alpha, lambda)
+  L_prev = L.b0
+  XtX = t(X)%*%X
+  
+  k=1
+  while (k==1 || (L_prev - L_curr)/L_prev > eps){
+    ## initialize D matrix
+    D = matrix(0,p,p)
+    ## fill in diagonal elements of D
+    for (i in range(p)){
+      D[i,i] = 1/max(abs(beta_0[i]),eps)
+    }
+    ## identity matrix
+    A = 1/n * XtX + lambda*(1-alpha)*diag(p) + lambda*alpha*D
+    ## update beta
+    beta_k = 1/n*solve(A)%*%t(X)%*%y
+    L_curr = Elas_Loss(y, X, beta_k, alpha, lambda) 
+    
+    if (verbose){
+      cat("Iter =",k,
+          "L curr =",L_curr,
+          "L prev - L curr =",L_prev-L_curr,
+          "L prev =",L_prev,"\n")
+    }
+    
+    ## update L prev
+    L_prev = L_curr
+    ## update beta
+    beta_0 = beta_k
+    ## next iter
+    k = k+1
+  }
+  return (beta_0)
+}
+```
+
+```{r}
+MM_elasticnet(y64,X64,alpha=0.5,lambda=145634.8,verbose=TRUE)
+```
 
