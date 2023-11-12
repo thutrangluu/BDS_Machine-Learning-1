@@ -35,8 +35,6 @@ dfair=data.frame(Airq)
 # make dummy variables for coas column
 dfair$coas<-ifelse(dfair$coas=="yes",1,0)
 X = model.matrix(airq~.,data=dfair)
-# X[,-1] = scale(X[,-1])
-XtX = t(X)%*%X
 ```
 
 ```{r}
@@ -58,30 +56,22 @@ r_vala = dfair$airq - y_vala
 ################# Scaled Lasso_Loss ####################
 
 Scaled_Lasso_Loss <- function(y,x,beta,r,lambda){
-  x=as.matrix(x)
-  y=as.matrix(y)
-  r=as.matrix(r)
   e = r-x*beta
   xtx = t(x)%*%x
   yty = t(y)%*%y
-  return((t(e)%*%e)/(yty)+lambda*abs(beta)*(xtx/yty)**1/2)
+  return((t(e)%*%e)/(yty)+lambda*sqrt((xtx/yty))*abs(beta))
 }
 
 ## 6.2e
-beta_e = c(seq(-0.001,0.001,length.out=100))
+beta_e = seq(-0.001,0.001,length.out=100)
 lambda_e = c(0.05,0.10,0.20)
 cols = rainbow(length(lambda_e))
-res1=c()
-res2=c()
-res3=c()
+res=c()
+for (lambda in lambda_e){
+  res = cbind(res,lapply(beta_e,FUN=Scaled_Lasso_Loss,y=dfair$airq,r=r_vala,x=X[,2],lambda=lambda))
+}
 
-res1 = lapply(beta_e,FUN=Scaled_Lasso_Loss,y=dfair$airq,r=r_vala,x=X[,2],lambda=0.05)
-res2 = lapply(beta_e,FUN=Scaled_Lasso_Loss,y=dfair$airq,r=r_vala,x=X[,2],lambda=0.10)
-res3 = lapply(beta_e,FUN=Scaled_Lasso_Loss,y=dfair$airq,r=r_vala,x=X[,2],lambda=0.20)
-
-matplot(beta_e, cbind(res1,res2,res3), col=cols, type="l", lty=1, lwd=2, xlab="beta", ylab="Scaled Lasso Loss")
-
-# res <- mapply(Scaled_Lasso_Loss,r_vala,X[2],beta_e,lambda_e)
+matplot(beta_e, res, col=cols, type="l", lty=1, lwd=2, xlab="beta", ylab="Scaled Lasso Loss")
 legend("bottomright", legend=lambda_e, title="lambda", lwd=2, col=cols)
 ```
 
@@ -110,7 +100,7 @@ dev.new(width = 20, height = 15, unit = "cm")
 plot(m63, xvar = "lambda", label = TRUE, las = 1)
 
 m63.cv <- cv.glmnet(X63, y63, alpha = 0.5, lambda = 10^seq(-2, 7, length.out = 50),
-                 standardize = FALSE,nfold=10)
+                 standardize = FALSE,nfold=5)
 
 result.m63 <- glmnet(X63, y63, alpha = 0.5, lambda = m63.cv$lambda.min,
                  standardize = FALSE)  
@@ -120,10 +110,13 @@ result.m63$beta
 
 ## Exercise 6.4
 ```{r}
+# Set y variable
 y64 <- as.vector(supermarket1996$GROCERY_sum) 
-X64 <- model.matrix(GROCERY_sum~., data = supermarket1996[cols_supermarket])  # Predictor variables (as a matrix, not dataframe)                  
+# Predictor variables (as a matrix, not dataframe)
+X64 <- model.matrix(GROCERY_sum~., data = supermarket1996[cols_supermarket])  
 # Make columns z-scores of nonfactors
 X64[,2:45] = scale(X64[,2:45])
+# Exclude intercept
 X64 = X64[,-1]
 ```
 
@@ -145,7 +138,6 @@ MM_elasticnet <- function(y, X, alpha, lambda,verbose=FALSE){
   beta_0 = matrix(1,p,1) # random beta_0
   # calculate loss given beta_0
   L_curr = Elas_Loss(y, X, beta_0, alpha, lambda)
-  print(L_curr)
   # preparation
   XtX = t(X)%*%X
   
