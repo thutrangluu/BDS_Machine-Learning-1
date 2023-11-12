@@ -78,6 +78,7 @@ legend("bottomright", legend=lambda_e, title="lambda", lwd=2, col=cols)
 ## Exercise 6.3
 ```{r load supermarket data}
 load("supermarket1996.RData")
+supermarket1996 <- na.omit(supermarket1996)
 ```
 
 ```{r}
@@ -127,15 +128,15 @@ Elas_Loss <- function(y, X, beta, alpha, lambda) {
   e = y-Xb
   btb = t(beta)%*%beta
   l1.dist = sum(abs(beta))
-  return ((2*n)**-1 * t(e)%*%e + lambda*((1-alpha)/2*btb + alpha*l1.dist))
+  return (1/(2*n) * t(e)%*%e + lambda*((1-alpha)/2*btb + alpha*l1.dist))
 }
 
 MM_elasticnet <- function(y, X, alpha, lambda,verbose=FALSE){
-  eps = 0.0000001 # set epsilon
+  eps = 0.00000000001 # set epsilon
   p=ncol(X) # find number of columns
   n=length(y)
   
-  beta_0 = matrix(1,p,1) # random beta_0
+  beta_0 = matrix(sample(range(1:p),size=p,replace=TRUE),p,1) # random beta_0
   # calculate loss given beta_0
   L_curr = Elas_Loss(y, X, beta_0, alpha, lambda)
   # preparation
@@ -147,7 +148,7 @@ MM_elasticnet <- function(y, X, alpha, lambda,verbose=FALSE){
     ## initialize D matrix
     D = matrix(0,p,p)
     ## fill in diagonal elements of D
-    for (i in range(p)){
+    for (i in range(1:p)){
       D[i,i] = 1/max(abs(beta_0[i]),eps)
     }
     ## identity matrix
@@ -155,6 +156,7 @@ MM_elasticnet <- function(y, X, alpha, lambda,verbose=FALSE){
     
     ## update beta
     beta_k = 1/n*solve(A)%*%t(X)%*%y
+
     ## new loss 
     L_prev = L_curr
     L_curr = Elas_Loss(y, X, beta_k, alpha, lambda) 
