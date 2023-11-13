@@ -118,7 +118,7 @@ X64 <- model.matrix(GROCERY_sum~., data = supermarket1996[cols_supermarket])
 # Make columns z-scores of nonfactors
 X64[,2:45] = scale(X64[,2:45])
 # Exclude intercept
-X64 = X64[,-1]
+# X64 = X64[,-1]
 ```
 
 ```{r}
@@ -132,11 +132,11 @@ Elas_Loss <- function(y, X, beta, alpha, lambda) {
 }
 
 MM_elasticnet <- function(y, X, alpha, lambda,verbose=FALSE){
-  eps = 0.00000000001 # set epsilon
+  eps = 0.00000001 # set epsilon
   p=ncol(X) # find number of columns
   n=length(y)
   
-  beta_0 = matrix(sample(range(1:p),size=p,replace=TRUE),p,1) # random beta_0
+  beta_0 = matrix(1,p,1) # random beta_0
   # calculate loss given beta_0
   L_curr = Elas_Loss(y, X, beta_0, alpha, lambda)
   # preparation
@@ -148,14 +148,14 @@ MM_elasticnet <- function(y, X, alpha, lambda,verbose=FALSE){
     ## initialize D matrix
     D = matrix(0,p,p)
     ## fill in diagonal elements of D
-    for (i in range(1:p)){
+    for (i in 1:p){
       D[i,i] = 1/max(abs(beta_0[i]),eps)
     }
     ## identity matrix
-    A = 1/n * XtX + lambda*(1-alpha)*diag(p) + lambda*alpha*D
+    A = (1/n) * XtX + lambda*(1-alpha)*diag(p) + lambda*alpha*D
     
     ## update beta
-    beta_k = 1/n*solve(A)%*%t(X)%*%y
+    beta_k = (1/n)*solve(A)%*%t(X)%*%y
 
     ## new loss 
     L_prev = L_curr
@@ -178,6 +178,6 @@ MM_elasticnet <- function(y, X, alpha, lambda,verbose=FALSE){
 ```
 
 ```{r}
-MM_elasticnet(y64,X64,alpha=0.5,lambda=145634.8,verbose=TRUE)
+MM_elasticnet(y64,X64,alpha=0.5,lambda=m63.cv$lambda.min,verbose=TRUE)
 ```
 
